@@ -165,10 +165,10 @@
                     <p>UA 伪装：${escapeHTML(spoofLabel(u.spoofClient))}</p>
                 </div>
                 <div class="card-footer">
-                    <button class="btn btn-ghost btn-sm" onclick="FR.editUpstream(${u.index})">编辑</button>
-                    <button class="btn btn-ghost btn-sm" onclick="FR.reconnectUpstream(${u.index})">重连</button>
-                    <button class="btn btn-ghost btn-sm" onclick="FR.toggleDiag(this, ${u.index})">诊断</button>
-                    <button class="btn btn-danger btn-sm" onclick="FR.deleteUpstream(${u.index})">删除</button>
+                    <button class="btn btn-ghost btn-sm" onclick="EM.editUpstream(${u.index})">编辑</button>
+                    <button class="btn btn-ghost btn-sm" onclick="EM.reconnectUpstream(${u.index})">重连</button>
+                    <button class="btn btn-ghost btn-sm" onclick="EM.toggleDiag(this, ${u.index})">诊断</button>
+                    <button class="btn btn-danger btn-sm" onclick="EM.deleteUpstream(${u.index})">删除</button>
                 </div>
             </div>
         `).join('');
@@ -177,7 +177,7 @@
     function upstreamFormHTML(data) {
         const d = data || {};
         const isEdit = !!data;
-        const modes = [['proxy', '代理中转'], ['direct', '直连分流'], ['redirect', '重定向��随']];
+        const modes = [['proxy', '代理中转'], ['direct', '直连分流'], ['redirect', '重定向跟随']];
         const spoofs = [['passthrough', '透传'], ['infuse', 'Infuse'], ['web', 'Web'], ['client', 'Client'], ['custom', '自定义']];
         return `
             <div class="form-group"><label>名称</label><input id="uf-name" value="${escapeHTML(d.name || '')}"></div>
@@ -188,7 +188,7 @@
                 <div class="hint">代理中转：流量经 EmberMux；直连分流：302 跳转；重定向跟随：服务端跟随</div>
             </div>
             <div class="form-group"><label>认证方式</label>
-                <select id="uf-authType" onchange="FR.toggleAuthFields()">
+                <select id="uf-authType" onchange="EM.toggleAuthFields()">
                     <option value="password"${(!d.authType || d.authType === 'password') ? ' selected' : ''}>用户名/密码</option>
                     <option value="apiKey"${d.authType === 'apiKey' ? ' selected' : ''}>API Key</option>
                 </select>
@@ -203,7 +203,7 @@
                 <div class="form-group"><label>API Key</label><input id="uf-apiKey" value=""></div>
             </div>
             <div class="form-group"><label>UA 伪装</label>
-                <select id="uf-spoofClient" onchange="FR.toggleCustomUA()">${spoofs.map(s => `<option value="${s[0]}"${d.spoofClient === s[0] ? ' selected' : ''}>${s[1]}</option>`).join('')}</select>
+                <select id="uf-spoofClient" onchange="EM.toggleCustomUA()">${spoofs.map(s => `<option value="${s[0]}"${d.spoofClient === s[0] ? ' selected' : ''}>${s[1]}</option>`).join('')}</select>
             </div>
             <div id="uf-custom-ua" class="${d.spoofClient === 'custom' ? '' : 'hidden'}">
                 <div class="form-row">
@@ -253,8 +253,8 @@
     }
 
     function showAddUpstream() {
-        openModal('添加上游', upstreamFormHTML(), '<button class="btn btn-ghost" onclick="FR.closeModal()">取消</button><button class="btn btn-primary" id="uf-save">保存</button>');
-        FR.toggleAuthFields();
+        openModal('添加上游', upstreamFormHTML(), '<button class="btn btn-ghost" onclick="EM.closeModal()">取消</button><button class="btn btn-primary" id="uf-save">保存</button>');
+        EM.toggleAuthFields();
         document.getElementById('uf-save').onclick = async () => {
             const body = collectUpstreamForm();
             const resp = await api('/upstream', { method: 'POST', body: JSON.stringify(body) });
@@ -273,9 +273,9 @@
         const list = await resp.json();
         const u = list.find(x => x.index === index);
         if (!u) { toast('未找到上游', 'error'); return; }
-        openModal('编辑上游', upstreamFormHTML(u), '<button class="btn btn-ghost" onclick="FR.closeModal()">取消</button><button class="btn btn-primary" id="uf-save">保存</button>');
-        FR.toggleAuthFields();
-        FR.toggleCustomUA();
+        openModal('编辑上游', upstreamFormHTML(u), '<button class="btn btn-ghost" onclick="EM.closeModal()">取消</button><button class="btn btn-primary" id="uf-save">保存</button>');
+        EM.toggleAuthFields();
+        EM.toggleCustomUA();
         document.getElementById('uf-save').onclick = async () => {
             const body = collectUpstreamForm();
             const resp = await api('/upstream/' + index, { method: 'PUT', body: JSON.stringify(body) });
@@ -324,7 +324,6 @@
         if (panel) { panel.remove(); return; }
         const dot = card.querySelector('.dot');
         const isOnline = dot && dot.classList.contains('dot-online');
-        const spoofSel = card.querySelector('.card-body').textContent;
         panel = document.createElement('div');
         panel.className = 'diag-panel';
         panel.innerHTML = `<dl>
@@ -349,8 +348,8 @@
                 <div class="card-header"><span class="card-title">${escapeHTML(p.name)}</span></div>
                 <div class="card-body"><p>地址：${escapeHTML(p.url)}</p></div>
                 <div class="card-footer">
-                    <button class="btn btn-ghost btn-sm" onclick="FR.testProxy('${escapeHTML(p.id)}')">测试</button>
-                    <button class="btn btn-danger btn-sm" onclick="FR.deleteProxy('${escapeHTML(p.id)}')">删除</button>
+                    <button class="btn btn-ghost btn-sm" onclick="EM.testProxy('${escapeHTML(p.id)}')">测试</button>
+                    <button class="btn btn-danger btn-sm" onclick="EM.deleteProxy('${escapeHTML(p.id)}')">删除</button>
                 </div>
             </div>
         `).join('');
@@ -360,7 +359,7 @@
         openModal('添加代理',
             '<div class="form-group"><label>名称</label><input id="pf-name" placeholder="My Proxy"></div>' +
             '<div class="form-group"><label>代理地址</label><input id="pf-url" placeholder="http://127.0.0.1:7890"></div>',
-            '<button class="btn btn-ghost" onclick="FR.closeModal()">取消</button><button class="btn btn-primary" id="pf-save">保存</button>'
+            '<button class="btn btn-ghost" onclick="EM.closeModal()">取消</button><button class="btn btn-primary" id="pf-save">保存</button>'
         );
         document.getElementById('pf-save').onclick = async () => {
             const body = { name: document.getElementById('pf-name').value, url: document.getElementById('pf-url').value };
@@ -408,10 +407,10 @@
                 <select id="sf-playbackMode">${modes.map(m => `<option value="${m[0]}"${s.playbackMode === m[0] ? ' selected' : ''}>${m[1]}</option>`).join('')}</select>
             </div>
             <div class="form-group"><label>管理员用户名</label><input id="sf-adminUsername" value="${escapeHTML(s.adminUsername || '')}"></div>
-            <h4 style="color:var(--text-secondary);margin:1rem 0 0.5rem;font-size:0.9rem">修改密码</h4>
+            <h4 style="color:var(--text-secondary);margin:1.25rem 0 0.5rem;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em">修改密码</h4>
             <div class="form-group"><label>当前密码</label><input type="password" id="sf-currentPassword" placeholder="不修改请留空"></div>
             <div class="form-group"><label>新密码</label><input type="password" id="sf-newPassword" placeholder="不修改请留空"></div>
-            <h4 style="color:var(--text-secondary);margin:1rem 0 0.5rem;font-size:0.9rem">超时设置</h4>
+            <h4 style="color:var(--text-secondary);margin:1.25rem 0 0.5rem;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em">超时设置</h4>
             <div class="form-row">
                 <div class="form-group"><label>API 超时 (ms)</label><input type="number" id="sf-timeout-api" value="${t.api || 30000}"></div>
                 <div class="form-group"><label>聚合超时 (ms)</label><input type="number" id="sf-timeout-global" value="${t.global || 15000}"></div>
@@ -421,7 +420,7 @@
                 <div class="form-group"><label>健康检查超时 (ms)</label><input type="number" id="sf-timeout-healthCheck" value="${t.healthCheck || 10000}"></div>
             </div>
             <div class="form-group"><label>检查间隔 (ms)</label><input type="number" id="sf-timeout-healthInterval" value="${t.healthInterval || 60000}"></div>
-            <div style="margin-top:1.25rem"><button class="btn btn-primary" id="sf-save">保存设置</button></div>
+            <div style="margin-top:1.5rem"><button class="btn btn-primary" id="sf-save">保存设置</button></div>
         `;
         document.getElementById('sf-save').onclick = saveSettings;
     }
@@ -506,7 +505,6 @@
         document.querySelectorAll('.nav-item').forEach(el => {
             el.classList.toggle('active', el.dataset.page === page);
         });
-        // Close mobile sidebar
         document.getElementById('sidebar').classList.remove('open');
         if (loaders[page]) loaders[page]();
     }
@@ -518,13 +516,12 @@
 
     // ── Init ──
     function init() {
-        // Login form
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = document.getElementById('login-btn');
             const errEl = document.getElementById('login-error');
             btn.disabled = true;
-            btn.textContent = '登录中...';
+            btn.querySelector('.btn-text').textContent = '登录中...';
             errEl.classList.add('hidden');
             try {
                 await doLogin(
@@ -538,41 +535,28 @@
                 errEl.classList.remove('hidden');
             } finally {
                 btn.disabled = false;
-                btn.textContent = '登录';
+                btn.querySelector('.btn-text').textContent = '登录';
             }
         });
 
-        // Logout
         document.getElementById('logout-btn').addEventListener('click', doLogout);
-
-        // Modal close
         document.getElementById('modal-close').addEventListener('click', closeModal);
         document.getElementById('modal-overlay').addEventListener('click', (e) => {
             if (e.target === e.currentTarget) closeModal();
         });
-
-        // Mobile menu
         document.getElementById('menu-toggle').addEventListener('click', () => {
             document.getElementById('sidebar').classList.toggle('open');
         });
-
-        // Upstream buttons
         document.getElementById('add-upstream-btn').addEventListener('click', showAddUpstream);
-
-        // Proxy buttons
         document.getElementById('add-proxy-btn').addEventListener('click', showAddProxy);
-
-        // Log controls
         document.getElementById('logs-refresh-btn').addEventListener('click', loadLogs);
         document.getElementById('logs-download-btn').addEventListener('click', downloadLogs);
         document.getElementById('logs-clear-btn').addEventListener('click', clearLogs);
         document.getElementById('log-search').addEventListener('input', renderLogs);
         document.getElementById('log-filter').addEventListener('change', renderLogs);
 
-        // Router
         window.addEventListener('hashchange', onHashChange);
 
-        // Check auth
         if (isLoggedIn()) {
             showApp();
             onHashChange();
@@ -582,7 +566,7 @@
     }
 
     // Expose needed functions globally for inline onclick handlers
-    window.FR = {
+    window.EM = {
         editUpstream, deleteUpstream, reconnectUpstream, toggleDiag,
         toggleAuthFields, toggleCustomUA,
         deleteProxy, testProxy,
