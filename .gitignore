@@ -1,5 +1,5 @@
-embermux
-embermux.exe
+/embermux
+/embermux.exe
 *.exe
 data/
 config/

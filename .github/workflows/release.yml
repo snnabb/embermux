@@ -10,18 +10,16 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - goos: linux
+          - runner: ubuntu-latest
+            goos: linux
             goarch: amd64
-          - goos: linux
+          - runner: macos-latest
+            goos: darwin
             goarch: arm64
-          - goos: darwin
-            goarch: arm64
-          - goos: windows
-            goarch: amd64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -31,17 +29,15 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
+          CGO_ENABLED: "1"
         run: |
           VERSION=${GITHUB_REF_NAME}
-          EXT=""
-          if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
           go build -trimpath -ldflags="-s -w -X main.Version=${VERSION}" \
-            -o embermux-${GOOS}-${GOARCH}${EXT} ./cmd/embermux
+            -o embermux-${GOOS}-${GOARCH} ./cmd/embermux
       - uses: actions/upload-artifact@v4
         with:
           name: embermux-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: embermux-*
+          path: embermux-${{ matrix.goos }}-${{ matrix.goarch }}
 
   release:
     needs: build
@@ -65,6 +61,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v5
         with:

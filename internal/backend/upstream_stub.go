@@ -37,7 +37,7 @@ var embyClientHeaders = map[string]string{
 	"User-Agent":            "Emby Aggregator/1.0",
 	"X-Emby-Client":         "Emby Aggregator",
 	"X-Emby-Client-Version": "1.0.0",
-	"X-Emby-Device-Name":    "EmbyInOne",
+	"X-Emby-Device-Name":    "EmberMux",
 	"X-Emby-Device-Id":      "embermux-proxy",
 	"Accept":                "application/json",
 }

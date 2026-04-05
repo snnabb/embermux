@@ -120,7 +120,7 @@ func TestAdminResponsesIncludeSecurityHeaders(t *testing.T) {
 			}
 		}
 
-		pageReq := httptest.NewRequest(http.MethodGet, "/admin/admin.html", nil)
+		pageReq := httptest.NewRequest(http.MethodGet, "/admin/", nil)
 		pageRR := httptest.NewRecorder()
 		handler.ServeHTTP(pageRR, pageReq)
 		if pageRR.Code != http.StatusOK {

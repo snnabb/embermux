@@ -92,7 +92,7 @@ func TestConfigSaveUsesAtomicReplace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read config after save: %v", err)
 	}
-	if !strings.Contains(string(raw), `name: "Atomic Name"`) {
+	if !strings.Contains(string(raw), `name: "Atomic Name"`) && !strings.Contains(string(raw), `name: 'Atomic Name'`) {
 		t.Fatalf("updated config missing server name: %s", string(raw))
 	}
 }

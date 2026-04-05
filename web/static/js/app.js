@@ -2,7 +2,7 @@
 (function () {
     'use strict';
 
-    const TOKEN_KEY = 'fr_token';
+    const TOKEN_KEY = 'embermux_token';
 
     // ── API helper ──
     async function api(path, opts = {}) {

@@ -34,12 +34,12 @@ type RequestContext struct {
 }
 
 type App struct {
-	ConfigStore *ConfigStore
-	Logger      *Logger
-	IDStore     *IDStore
-	Identity    *ClientIdentityService
-	Auth        *AuthManager
-	Upstream    *UpstreamPool
+	ConfigStore  *ConfigStore
+	Logger       *Logger
+	IDStore      *IDStore
+	Identity     *ClientIdentityService
+	Auth         *AuthManager
+	Upstream     *UpstreamPool
 	loginLimiter loginRateLimiter
 }
 
@@ -1463,7 +1463,7 @@ func (a *App) Run() error {
 		_ = server.Shutdown(ctx)
 	}()
 
-	a.Logger.Infof("Go Emby-in-One listening on port %d", cfg.Server.Port)
+	a.Logger.Infof("EmberMux listening on port %d", cfg.Server.Port)
 	err := server.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil

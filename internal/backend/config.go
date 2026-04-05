@@ -106,7 +106,7 @@ func LoadConfigStore() (*ConfigStore, error) {
 		cfg.Server.Port = 8096
 	}
 	if cfg.Server.Name == "" {
-		cfg.Server.Name = "Emby In One"
+		cfg.Server.Name = "EmberMux"
 	}
 	if cfg.Server.ID == "" {
 		cfg.Server.ID = randomHex(16)

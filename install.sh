@@ -43,6 +43,13 @@ do_install() {
     arch=$(detect_arch)
     info "检测到平台: ${os}/${arch}"
 
+    if [ "$os" = "linux" ] && [ "$arch" = "arm64" ]; then
+        error "当前 linux/arm64 不提供自动安装，请改用 Docker 镜像部署 EmberMux"
+    fi
+    if [ "$os" = "darwin" ] && [ "$arch" = "amd64" ]; then
+        error "当前仅提供 darwin/arm64 binary，darwin/amd64 暂不支持自动安装"
+    fi
+
     version=$(get_latest_version)
     if [ -z "$version" ]; then
         error "无法获取最新版本号"
