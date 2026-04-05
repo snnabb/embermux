@@ -1,0 +1,12 @@
+services:
+  embermux:
+    build: .
+    container_name: embermux
+    restart: unless-stopped
+    ports:
+      - "8096:8096"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - TZ=Asia/Shanghai

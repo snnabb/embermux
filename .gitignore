@@ -1,0 +1,7 @@
+embermux
+embermux.exe
+*.exe
+data/
+config/
+*.log
+.DS_Store

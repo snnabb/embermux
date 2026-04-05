@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmberMux</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="login-page" class="login-page hidden">
+        <div class="login-card">
+            <div class="login-logo">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                    <rect width="48" height="48" rx="12" fill="#58a6ff"/>
+                    <path d="M14 24L22 32L34 16" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <h1 class="login-title">EmberMux</h1>
+            <p class="login-subtitle">Emby 多上游聚合代理</p>
+            <form id="login-form" autocomplete="off">
+                <div class="form-group">
+                    <label for="login-username">用户名</label>
+                    <input type="text" id="login-username" placeholder="管理员用户名" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">密码</label>
+                    <input type="password" id="login-password" placeholder="管理员密码" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" id="login-btn">登录</button>
+                <p id="login-error" class="login-error hidden"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app" class="app-layout hidden">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
+                    <rect width="48" height="48" rx="12" fill="#58a6ff"/>
+                    <path d="M14 24L22 32L34 16" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="sidebar-brand">EmberMux</span>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item active" data-page="dashboard">
+                    <span class="nav-icon">&#9632;</span> 仪表盘
+                </a>
+                <a href="#upstreams" class="nav-item" data-page="upstreams">
+                    <span class="nav-icon">&#9650;</span> 上游管理
+                </a>
+                <a href="#proxies" class="nav-item" data-page="proxies">
+                    <span class="nav-icon">&#9670;</span> 网络代理
+                </a>
+                <a href="#settings" class="nav-item" data-page="settings">
+                    <span class="nav-icon">&#9881;</span> 系统设置
+                </a>
+                <a href="#logs" class="nav-item" data-page="logs">
+                    <span class="nav-icon">&#9776;</span> 系统日志
+                </a>
+                <a href="#about" class="nav-item" data-page="about">
+                    <span class="nav-icon">&#9432;</span> 关于
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn btn-ghost btn-sm" id="logout-btn">退出登录</button>
+            </div>
+        </aside>
+
+        <!-- Mobile Header -->
+        <header class="mobile-header">
+            <button class="hamburger" id="menu-toggle">&#9776;</button>
+            <span class="mobile-brand">EmberMux</span>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content" id="main-content">
+            <!-- Dashboard -->
+            <section id="page-dashboard" class="page">
+                <h2 class="page-title">仪表盘</h2>
+                <div class="stats-grid" id="stats-grid"></div>
+                <h3 class="section-title">上游状态</h3>
+                <div class="card-grid" id="upstream-status-grid"></div>
+            </section>
+
+            <!-- Upstreams -->
+            <section id="page-upstreams" class="page hidden">
+                <div class="page-header">
+                    <h2 class="page-title">上游管理</h2>
+                    <button class="btn btn-primary" id="add-upstream-btn">+ 添加上游</button>
+                </div>
+                <div class="card-grid" id="upstream-list"></div>
+            </section>
+
+            <!-- Proxies -->
+            <section id="page-proxies" class="page hidden">
+                <div class="page-header">
+                    <h2 class="page-title">网络代理</h2>
+                    <button class="btn btn-primary" id="add-proxy-btn">+ 添加代理</button>
+                </div>
+                <div class="card-grid" id="proxy-list"></div>
+            </section>
+
+            <!-- Settings -->
+            <section id="page-settings" class="page hidden">
+                <h2 class="page-title">系统设置</h2>
+                <div class="settings-card" id="settings-form-container"></div>
+            </section>
+
+            <!-- Logs -->
+            <section id="page-logs" class="page hidden">
+                <div class="page-header">
+                    <h2 class="page-title">系统日志</h2>
+                    <div class="btn-group">
+                        <button class="btn btn-ghost btn-sm" id="logs-refresh-btn">刷新</button>
+                        <button class="btn btn-ghost btn-sm" id="logs-download-btn">下载</button>
+                        <button class="btn btn-danger btn-sm" id="logs-clear-btn">清空</button>
+                    </div>
+                </div>
+                <div class="log-toolbar">
+                    <input type="text" id="log-search" class="input-sm" placeholder="搜索日志...">
+                    <select id="log-filter" class="input-sm">
+                        <option value="">全部级别</option>
+                        <option value="ERROR">ERROR</option>
+                        <option value="WARN">WARN</option>
+                        <option value="INFO">INFO</option>
+                        <option value="DEBUG">DEBUG</option>
+                    </select>
+                </div>
+                <pre class="log-viewer" id="log-viewer"></pre>
+            </section>
+
+            <!-- About -->
+            <section id="page-about" class="page hidden">
+                <h2 class="page-title">关于</h2>
+                <div class="about-card">
+                    <div class="about-logo">
+                        <svg width="64" height="64" viewBox="0 0 48 48" fill="none">
+                            <rect width="48" height="48" rx="12" fill="#58a6ff"/>
+                            <path d="M14 24L22 32L34 16" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h1>EmberMux</h1>
+                    <p class="about-version" id="about-version">v1.0.0</p>
+                    <p class="about-desc">Emby 多上游聚合代理 — 基于 Emby-In-One 后端引擎</p>
+                    <div class="about-links">
+                        <a href="https://github.com/snnabb/embermux" target="_blank" class="btn btn-ghost">GitHub</a>
+                    </div>
+                    <div class="about-tech">
+                        <h4>技术栈</h4>
+                        <ul>
+                            <li>后端：Go + 标准库 net/http</li>
+                            <li>前端：原生 HTML / CSS / JavaScript</li>
+                            <li>存储：SQLite (CGO) + YAML 配置</li>
+                            <li>部署：单二进制 / Docker / Systemd</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal Overlay -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal" id="modal">
+            <div class="modal-header">
+                <h3 id="modal-title"></h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+            <div class="modal-footer" id="modal-footer"></div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
