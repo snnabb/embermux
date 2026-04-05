@@ -5,7 +5,6 @@
     const TOKEN_KEY = 'embermux_token';
     let cachedUpstreams = [];
 
-    // ── API helper ──
     async function api(path, opts = {}) {
         const token = localStorage.getItem(TOKEN_KEY);
         const resp = await fetch('/admin/api' + path, {
@@ -16,19 +15,15 @@
         return resp;
     }
 
-    // ── Loading helper ──
     function withLoading(btn, fn) {
         return async function () {
             if (btn.disabled) return;
-            const orig = btn.innerHTML;
-            btn.disabled = true;
-            btn.classList.add('btn-loading');
+            btn.disabled = true; btn.classList.add('btn-loading');
             const sp = document.createElement('span'); sp.className = 'spinner'; btn.prepend(sp);
             try { await fn(); } finally { btn.disabled = false; btn.classList.remove('btn-loading'); if (btn.contains(sp)) sp.remove(); }
         };
     }
 
-    // ── Toast ──
     function toast(msg, type = 'info') {
         const c = document.getElementById('toast-container');
         const el = document.createElement('div'); el.className = 'toast toast-' + type; el.textContent = msg;
@@ -36,7 +31,6 @@
         setTimeout(() => { el.classList.add('toast-out'); setTimeout(() => el.remove(), 200); }, 3000);
     }
 
-    // ── Modal ──
     function openModal(title, bodyHTML, footerHTML) {
         document.getElementById('modal-title').textContent = title;
         document.getElementById('modal-body').innerHTML = bodyHTML;
@@ -56,10 +50,7 @@
 
     function escapeHTML(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-    // ── Validation ──
-    function isValidURL(str) {
-        try { const u = new URL(str); return u.protocol === 'http:' || u.protocol === 'https:'; } catch { return false; }
-    }
+    function isValidURL(str) { try { const u = new URL(str); return u.protocol === 'http:' || u.protocol === 'https:'; } catch { return false; } }
 
     function validateUpstreamForm() {
         const errors = [];
@@ -101,7 +92,6 @@
 
     function showValidationErrors(errors) { if (errors.length) { toast(errors[0], 'error'); return false; } return true; }
 
-    // ── Auth ──
     function isLoggedIn() { return !!localStorage.getItem(TOKEN_KEY); }
     function showLogin() { document.getElementById('login-page').classList.remove('hidden'); document.getElementById('app').classList.add('hidden'); }
     function showApp() { document.getElementById('login-page').classList.add('hidden'); document.getElementById('app').classList.remove('hidden'); }
@@ -120,7 +110,6 @@
 
     async function doLogout() { await api('/logout', { method: 'POST' }).catch(() => {}); localStorage.removeItem(TOKEN_KEY); showLogin(); }
 
-    // ── Labels ──
     const playbackLabels = { proxy: '代理中转', direct: '直连分流', redirect: '重定向跟随' };
     function playbackLabel(mode) { return playbackLabels[mode] || mode || '默认'; }
     function playbackBadge(mode) {
@@ -132,12 +121,13 @@
 
     // ── Dashboard ──
     async function loadDashboard() {
-        const resp = await api('/status');
-        if (!resp) return;
+        const resp = await api('/status'); if (!resp) return;
         const d = await resp.json();
+        // FIX: idMappings is {MappingCount: N, Persistent: bool}, extract the number
+        const mappingCount = (d.idMappings && typeof d.idMappings === 'object') ? (d.idMappings.MappingCount || 0) : (d.idMappings || 0);
         document.getElementById('stats-grid').innerHTML = [
             statCard('服务名称', d.serverName, ''), statCard('监听端口', d.port, 'blue'),
-            statCard('全局播放模式', playbackLabel(d.playbackMode), ''), statCard('ID 映射数', d.idMappings, 'yellow'),
+            statCard('全局播放模式', playbackLabel(d.playbackMode), ''), statCard('ID 映射数', mappingCount, 'yellow'),
             statCard('上游总数', d.upstreamCount, 'blue'), statCard('在线上游', d.upstreamOnline, 'green'),
         ].join('');
         const sg = document.getElementById('upstream-status-grid');
@@ -145,14 +135,12 @@
         sg.innerHTML = d.upstream.map(u => `<div class="card"><div class="card-header"><span class="card-title"><span class="dot ${u.online ? 'dot-online' : 'dot-offline'}"></span>${escapeHTML(u.name)}</span>${playbackBadge(u.playbackMode)}</div><div class="card-body"><p>${escapeHTML(u.host)}</p></div></div>`).join('');
     }
     function statCard(label, value, color) {
-        return `<div class="stat-card"><div class="stat-label">${escapeHTML(label)}</div><div class="stat-value ${color}">${escapeHTML(String(value))}</div></div>`;
+        return '<div class="stat-card"><div class="stat-label">' + escapeHTML(label) + '</div><div class="stat-value ' + color + '">' + escapeHTML(String(value)) + '</div></div>';
     }
 
-    // ══════════════════════════════
-    // T6: DRAG & DROP REORDER
-    // ══════════════════════════════
+    // ── Drag & Drop ──
     let dragFrom = -1;
-    const dragHandle = '<span class="drag-handle" title="拖拽排序"><svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M7 2a2 2 0 100 4 2 2 0 000-4zm0 6a2 2 0 100 4 2 2 0 000-4zm0 6a2 2 0 100 4 2 2 0 000-4zm6-12a2 2 0 100 4 2 2 0 000-4zm0 6a2 2 0 100 4 2 2 0 000-4zm0 6a2 2 0 100 4 2 2 0 000-4z"/></svg></span>';
+    const dragHandleHTML = '<span class="drag-handle" title="拖拽排序"><svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M7 2a2 2 0 100 4 2 2 0 000-4zm0 6a2 2 0 100 4 2 2 0 000-4zm0 6a2 2 0 100 4 2 2 0 000-4zm6-12a2 2 0 100 4 2 2 0 000-4zm0 6a2 2 0 100 4 2 2 0 000-4zm0 6a2 2 0 100 4 2 2 0 000-4z"/></svg></span>';
 
     function bindDragEvents(el) {
         el.addEventListener('dragstart', e => { const c = e.target.closest('.card[data-index]'); if (!c) return; dragFrom = +c.dataset.index; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
@@ -164,24 +152,20 @@
 
     async function doReorder(from, to) {
         const resp = await api('/upstream/reorder', { method: 'POST', body: JSON.stringify({ fromIndex: from, toIndex: to }) });
-        if (!resp) return;
-        if (!resp.ok) { toast('排序失败', 'error'); return; }
-        toast('排序已更新', 'success');
-        loadUpstreams(); loadDashboard();
+        if (!resp) return; if (!resp.ok) { toast('排序失败', 'error'); return; }
+        toast('排序已更新', 'success'); loadUpstreams(); loadDashboard();
     }
 
     // ── Upstreams ──
     async function loadUpstreams() {
-        const resp = await api('/upstream');
-        if (!resp) return;
-        const list = await resp.json();
-        cachedUpstreams = list || [];
+        const resp = await api('/upstream'); if (!resp) return;
+        const list = await resp.json(); cachedUpstreams = list || [];
         const container = document.getElementById('upstream-list');
         if (!list || !list.length) { container.innerHTML = '<div class="empty-state"><p>暂无上游服务器，点击右上角添加</p></div>'; return; }
         container.innerHTML = list.map(u => `
             <div class="card" data-index="${u.index}" draggable="true">
                 <div class="card-header">
-                    <span class="card-title">${dragHandle}<span class="dot ${u.online ? 'dot-online' : 'dot-offline'}"></span>${escapeHTML(u.name)}</span>
+                    <span class="card-title">${dragHandleHTML}<span class="dot ${u.online ? 'dot-online' : 'dot-offline'}"></span>${escapeHTML(u.name)}</span>
                     ${playbackBadge(u.playbackMode)}
                 </div>
                 <div class="card-body">
@@ -205,12 +189,12 @@
         return `
             <div class="form-group"><label>名称 <span class="required">*</span></label><input id="uf-name" value="${escapeHTML(d.name||'')}"></div>
             <div class="form-group"><label>上游地址 <span class="required">*</span></label><input id="uf-url" placeholder="https://emby.example.com" value="${escapeHTML(d.url||'')}"></div>
-            <div class="form-group"><label>播放回源地址</label><input id="uf-streamingUrl" placeholder="留空则使用上游地址" value="${escapeHTML(d.streamingUrl||'')}"></div>
-            <div class="form-group"><label>播放模式</label><select id="uf-playbackMode">${modes.map(m=>`<option value="${m[0]}"${d.playbackMode===m[0]?' selected':''}>${m[1]}</option>`).join('')}</select><div class="hint">代理中转：流量经 EmberMux；直连分流：302 跳转；重定向跟随：服务端跟随</div></div>
+            <div class="form-group"><label>播放回源地址</label><input id="uf-streamingUrl" placeholder="留空则与上游地址相同" value="${escapeHTML(d.streamingUrl||'')}"><div class="hint">播放媒体时使用的地址，留空自动使用上游地址</div></div>
+            <div class="form-group"><label>播放模式</label><select id="uf-playbackMode">${modes.map(m=>'<option value="'+m[0]+'"'+(d.playbackMode===m[0]?' selected':'')+'>'+m[1]+'</option>').join('')}</select><div class="hint">代理中转：流量经 EmberMux；直连分流：302 跳转；重定向跟随：服务端跟随</div></div>
             <div class="form-group"><label>认证方式</label><select id="uf-authType" onchange="EM.toggleAuthFields()"><option value="password"${(!d.authType||d.authType==='password')?' selected':''}>用户名/密码</option><option value="apiKey"${d.authType==='apiKey'?' selected':''}>API Key</option></select></div>
             <div id="uf-password-fields"><div class="form-row"><div class="form-group"><label>用户名 <span class="required">*</span></label><input id="uf-username" value="${escapeHTML(d.username||'')}"></div><div class="form-group"><label>密码${isEdit?'':' <span class="required">*</span>'}</label><input type="password" id="uf-password" placeholder="${isEdit?'留空保持不变':''}"></div></div></div>
             <div id="uf-apikey-fields" class="hidden"><div class="form-group"><label>API Key <span class="required">*</span></label><input id="uf-apiKey" value=""></div></div>
-            <div class="form-group"><label>UA 伪装</label><select id="uf-spoofClient" onchange="EM.toggleCustomUA()">${spoofs.map(s=>`<option value="${s[0]}"${d.spoofClient===s[0]?' selected':''}>${s[1]}</option>`).join('')}</select></div>
+            <div class="form-group"><label>UA 伪装</label><select id="uf-spoofClient" onchange="EM.toggleCustomUA()">${spoofs.map(s=>'<option value="'+s[0]+'"'+(d.spoofClient===s[0]?' selected':'')+'>'+s[1]+'</option>').join('')}</select></div>
             <div id="uf-custom-ua" class="${d.spoofClient==='custom'?'':'hidden'}"><div class="form-row"><div class="form-group"><label>User-Agent</label><input id="uf-customUserAgent" value="${escapeHTML(d.customUserAgent||'')}"></div><div class="form-group"><label>Client</label><input id="uf-customClient" value="${escapeHTML(d.customClient||'')}"></div></div><div class="form-row"><div class="form-group"><label>Version</label><input id="uf-customClientVersion" value="${escapeHTML(d.customClientVersion||'')}"></div><div class="form-group"><label>DeviceName</label><input id="uf-customDeviceName" value="${escapeHTML(d.customDeviceName||'')}"></div></div><div class="form-group"><label>DeviceId</label><input id="uf-customDeviceId" value="${escapeHTML(d.customDeviceId||'')}"></div></div>
             <div class="form-group form-group-inline"><input type="checkbox" id="uf-priorityMetadata"${d.priorityMetadata?' checked':''}><label for="uf-priorityMetadata">元数据优先</label></div>
             <div class="form-group form-group-inline"><input type="checkbox" id="uf-followRedirects"${d.followRedirects!==false?' checked':''}><label for="uf-followRedirects">跟随重定向</label></div>
@@ -276,31 +260,23 @@
         document.getElementById('uf-custom-ua').classList.toggle('hidden', sel.value !== 'custom');
     }
 
-    // ══════════════════════════════
-    // T7: ENHANCED DIAGNOSTICS
-    // ══════════════════════════════
+    // ── Diagnostics (only uses fields actually returned by API) ──
     async function toggleDiag(btn, index) {
         const card = btn.closest('.card'); let panel = card.querySelector('.diag-panel');
         if (panel) { panel.remove(); return; }
         let u = cachedUpstreams.find(x => x.index === index);
         if (!u) { const r = await api('/upstream'); if (!r) return; cachedUpstreams = await r.json(); u = cachedUpstreams.find(x => x.index === index); }
         if (!u) { toast('未找到上游信息','error'); return; }
-        let ci = null;
-        if (u.spoofClient === 'passthrough') { try { const r = await api('/client-info'); if (r && r.ok) ci = await r.json(); } catch {} }
 
         const rows = [];
         rows.push(dr('连接状态', u.online ? '<span style="color:var(--green)">● 在线</span>' : '<span style="color:var(--red)">● 离线</span>'));
-        if (u.lastError) rows.push(dr('最后错误', '<span style="color:var(--red)">' + escapeHTML(u.lastError) + '</span>'));
         rows.push(dr('认证方式', u.authType === 'apiKey' ? 'API Key' : '用户名/密码'));
         rows.push(dr('UA 伪装', escapeHTML(spoofLabel(u.spoofClient))));
         rows.push(dr('播放模式', escapeHTML(playbackLabel(u.playbackMode))));
-        if (u.streamingUrl) rows.push(dr('播放回源', escapeHTML(u.streamingUrl)));
         rows.push(dr('跟随重定向', u.followRedirects !== false ? '是' : '否'));
         rows.push(dr('元数据优先', u.priorityMetadata ? '是' : '否'));
         if (u.proxyId) rows.push(dr('关联代理', escapeHTML(u.proxyId)));
-        if (ci) { if (ci.userAgent) rows.push(dr('捕获 UA', escapeHTML(ci.userAgent))); if (ci.client) rows.push(dr('捕获 Client', escapeHTML(ci.client))); if (ci.deviceName) rows.push(dr('捕获 Device', escapeHTML(ci.deviceName))); }
-        if (!u.online && u.spoofClient !== 'passthrough') rows.push(dr('建议', '检查上游地址和认证信息，或尝试"重连"'));
-        else if (!u.online && u.spoofClient === 'passthrough') rows.push(dr('建议', '透传模式需要 Emby 客户端先连接以捕获身份'));
+        if (!u.online) rows.push(dr('建议', u.spoofClient === 'passthrough' ? '透传模式需要 Emby 客户端先连接以捕获身份' : '检查上游地址和认证信息，或尝试"重连"'));
 
         panel = document.createElement('div'); panel.className = 'diag-panel';
         panel.innerHTML = '<dl>' + rows.join('') + '</dl>'; card.appendChild(panel);
@@ -312,7 +288,7 @@
         const resp = await api('/proxies'); if (!resp) return;
         const list = await resp.json(); const c = document.getElementById('proxy-list');
         if (!list || !list.length) { c.innerHTML = '<div class="empty-state"><p>暂无网络代理，点击右上角添加</p></div>'; return; }
-        c.innerHTML = list.map(p => `<div class="card" data-id="${escapeHTML(p.id)}"><div class="card-header"><span class="card-title">${escapeHTML(p.name)}</span></div><div class="card-body"><p>地址：${escapeHTML(p.url)}</p></div><div class="card-footer"><button class="btn btn-ghost btn-sm" onclick="EM.testProxy('${escapeHTML(p.id)}')">测试</button><button class="btn btn-danger btn-sm" onclick="EM.deleteProxy('${escapeHTML(p.id)}')">删除</button></div></div>`).join('');
+        c.innerHTML = list.map(p => '<div class="card" data-id="'+escapeHTML(p.id)+'"><div class="card-header"><span class="card-title">'+escapeHTML(p.name)+'</span></div><div class="card-body"><p>地址：'+escapeHTML(p.url)+'</p></div><div class="card-footer"><button class="btn btn-ghost btn-sm" onclick="EM.testProxy(\''+escapeHTML(p.id)+'\')">测试</button><button class="btn btn-danger btn-sm" onclick="EM.deleteProxy(\''+escapeHTML(p.id)+'\')">删除</button></div></div>').join('');
     }
 
     function showAddProxy() {
@@ -333,7 +309,7 @@
         toast('正在测试...','info');
         const resp = await api('/proxies/test', { method: 'POST', body: JSON.stringify({ proxyId: id, targetUrl: target }) }); if (!resp) return;
         const r = await resp.json();
-        r.success ? toast(`连通成功，延迟 ${r.latency}ms，状态码 ${r.statusCode}`,'success') : toast('连通失败：'+(r.error||'未知错误'),'error');
+        r.success ? toast('连通成功，延迟 '+r.latency+'ms，状态码 '+r.statusCode,'success') : toast('连通失败：'+(r.error||'未知错误'),'error');
     }
 
     // ── Settings ──
@@ -342,7 +318,7 @@
         const s = await resp.json(); const modes = [['proxy','代理中转'],['direct','直连分流'],['redirect','重定向跟随']]; const t = s.timeouts || {};
         document.getElementById('settings-form-container').innerHTML = `
             <div class="form-group"><label>服务名称 <span class="required">*</span></label><input id="sf-serverName" value="${escapeHTML(s.serverName||'')}"></div>
-            <div class="form-group"><label>全局播放模式</label><select id="sf-playbackMode">${modes.map(m=>`<option value="${m[0]}"${s.playbackMode===m[0]?' selected':''}>${m[1]}</option>`).join('')}</select></div>
+            <div class="form-group"><label>全局播放模式</label><select id="sf-playbackMode">${modes.map(m=>'<option value="'+m[0]+'"'+(s.playbackMode===m[0]?' selected':'')+'>'+m[1]+'</option>').join('')}</select></div>
             <div class="form-group"><label>管理员用户名</label><input id="sf-adminUsername" value="${escapeHTML(s.adminUsername||'')}"></div>
             <h4 style="color:var(--text-secondary);margin:1.25rem 0 .5rem;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em">修改密码</h4>
             <div class="form-group"><label>当前密码</label><input type="password" id="sf-currentPassword" placeholder="不修改请留空"></div>
@@ -371,16 +347,18 @@
     }
 
     // ── Logs ──
-    let logsRaw = '';
-    async function loadLogs() { const r = await api('/logs'); if (!r) return; logsRaw = await r.text(); renderLogs(); }
+    let logsData = [];
+    async function loadLogs() { const r = await api('/logs'); if (!r) return; try { logsData = await r.json(); } catch { logsData = []; } if (!Array.isArray(logsData)) logsData = []; renderLogs(); }
     function renderLogs() {
         const search = (document.getElementById('log-search').value||'').toLowerCase(), level = document.getElementById('log-filter').value, viewer = document.getElementById('log-viewer');
         let html = '';
-        for (const line of logsRaw.split('\n')) {
+        for (const entry of logsData) {
+            const ts = entry.timestamp || '', lv = entry.level || '', msg = entry.message || '';
+            const line = ts + ' [' + lv + '] ' + msg;
             if (search && !line.toLowerCase().includes(search)) continue;
-            if (level && !line.includes(level)) continue;
-            let cls = 'log-debug'; if (line.includes('ERROR')) cls='log-error'; else if (line.includes('WARN')) cls='log-warn'; else if (line.includes('INFO')) cls='log-info';
-            html += '<span class="log-line '+cls+'">' + escapeHTML(line) + '</span>\n';
+            if (level && lv !== level) continue;
+            let cls = 'log-debug'; if (lv === 'ERROR') cls='log-error'; else if (lv === 'WARN') cls='log-warn'; else if (lv === 'INFO') cls='log-info';
+            html += '<span class="log-line '+cls+'"><span class="log-ts">' + escapeHTML(ts) + '</span> <span class="log-lv">[' + escapeHTML(lv) + ']</span> ' + escapeHTML(msg) + '</span>\n';
         }
         viewer.innerHTML = html || '<span style="color:var(--text-muted)">暂无日志</span>'; viewer.scrollTop = viewer.scrollHeight;
     }
@@ -410,7 +388,7 @@
         });
         document.getElementById('logout-btn').addEventListener('click', doLogout);
         document.getElementById('modal-close').addEventListener('click', closeModal);
-        document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+        // FIX: Do NOT close modal on overlay click — only close via X or Cancel button
         document.getElementById('menu-toggle').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));
         document.getElementById('add-upstream-btn').addEventListener('click', showAddUpstream);
         document.getElementById('add-proxy-btn').addEventListener('click', showAddProxy);

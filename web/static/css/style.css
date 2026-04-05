@@ -175,7 +175,9 @@ body {
 .input-sm:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
 #log-search { flex: 1; min-width: 180px; }
 .log-viewer { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.8; max-height: 70vh; overflow: auto; white-space: pre-wrap; word-break: break-all; }
-.log-line { display: block; }
+.log-line { display: block; padding: 1px 0; }
+.log-ts { color: var(--text-muted); }
+.log-lv { font-weight: 600; }
 .log-error { color: var(--red); }
 .log-warn { color: var(--yellow); }
 .log-info { color: var(--green); }
