@@ -399,10 +399,18 @@ func (a *App) handleSearchHints(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			item := r.Items[i]
-			key := getItemKey(item)
+			keys := getItemKeys(item)
 
-			if key != "" {
-				if entry, found := seen[key]; found {
+			if len(keys) != 0 {
+				var entry *seenEntry
+				for _, key := range keys {
+					if found := seen[key]; found != nil {
+						entry = found
+						break
+					}
+				}
+
+				if entry != nil {
 					if originalID, ok := item["Id"].(string); ok && originalID != "" {
 						a.IDStore.AssociateAdditionalInstance(entry.virtualID, originalID, r.ServerIndex)
 					}
@@ -414,11 +422,17 @@ func (a *App) handleSearchHints(w http.ResponseWriter, r *http.Request) {
 						merged[entry.mergedIndex] = item
 						entry.serverIndex = r.ServerIndex
 					}
+					for _, key := range keys {
+						seen[key] = entry
+					}
 					continue
 				}
 				if originalID, ok := item["Id"].(string); ok && originalID != "" {
 					virtualID := a.IDStore.GetOrCreateVirtualID(originalID, r.ServerIndex)
-					seen[key] = &seenEntry{virtualID: virtualID, mergedIndex: len(merged), serverIndex: r.ServerIndex}
+					entry := &seenEntry{virtualID: virtualID, mergedIndex: len(merged), serverIndex: r.ServerIndex}
+					for _, key := range keys {
+						seen[key] = entry
+					}
 					delete(item, "Id")
 					rewriteResponseIDs(item, r.ServerIndex, a.IDStore, cfg.Server.ID, a.Auth.ProxyUserID())
 					item["Id"] = virtualID

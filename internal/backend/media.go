@@ -458,16 +458,22 @@ func (a *App) fetchItemsAcrossUpstreams(ctx context.Context, reqCtx *RequestCont
 	return results
 }
 
-// getItemKey generates a deduplication key for an item.
-// Returns empty string if the item cannot be deduplicated.
-func getItemKey(item map[string]any) string {
-	// Priority 1: TMDB ID
+// getItemKeys generates every deduplication key available for an item.
+func getItemKeys(item map[string]any) []string {
+	keys := make([]string, 0, 5)
+
 	if providerIDs, ok := item["ProviderIds"].(map[string]any); ok {
 		if tmdb, ok := providerIDs["Tmdb"].(string); ok && tmdb != "" {
-			return "tmdb:" + tmdb
+			keys = append(keys, "tmdb:"+tmdb)
+		}
+		if imdb, ok := providerIDs["Imdb"].(string); ok && imdb != "" {
+			keys = append(keys, "imdb:"+imdb)
+		}
+		if tvdb, ok := providerIDs["Tvdb"].(string); ok && tvdb != "" {
+			keys = append(keys, "tvdb:"+tvdb)
 		}
 	}
-	// Priority 2: Movie/Series by Name + Year
+
 	itemType, _ := item["Type"].(string)
 	if itemType == "Movie" || itemType == "Series" {
 		name, _ := item["Name"].(string)
@@ -475,26 +481,25 @@ func getItemKey(item map[string]any) string {
 		if y, ok := numericInt(item["ProductionYear"]); ok {
 			year = strconv.Itoa(y)
 		}
-		return "name:" + strings.ToLower(name) + ":" + year
+		keys = append(keys, "name:"+strings.ToLower(name)+":"+year)
 	}
-	// Priority 3: Season by SeriesName + SeasonNumber
 	if itemType == "Season" {
 		seriesName, _ := item["SeriesName"].(string)
 		idx, okI := numericInt(item["IndexNumber"])
 		if seriesName != "" && okI {
-			return "season:" + strings.ToLower(seriesName) + ":S" + strconv.Itoa(idx)
+			keys = append(keys, "season:"+strings.ToLower(seriesName)+":S"+strconv.Itoa(idx))
 		}
 	}
-	// Priority 4: Episode by SeriesName + Season:Episode
 	if itemType == "Episode" {
 		seriesName, _ := item["SeriesName"].(string)
 		parentIdx, okP := numericInt(item["ParentIndexNumber"])
 		idx, okE := numericInt(item["IndexNumber"])
 		if seriesName != "" && okP && okE {
-			return "ep:" + strings.ToLower(seriesName) + ":S" + strconv.Itoa(parentIdx) + "E" + strconv.Itoa(idx)
+			keys = append(keys, "ep:"+strings.ToLower(seriesName)+":S"+strconv.Itoa(parentIdx)+"E"+strconv.Itoa(idx))
 		}
 	}
-	return ""
+
+	return keys
 }
 
 // containsChinese checks if a string contains CJK Unified Ideographs (U+4E00–U+9FA5).
@@ -580,10 +585,18 @@ func (a *App) mergedItemsPayload(results []upstreamItemsResult) map[string]any {
 				continue
 			}
 			item := r.Items[i]
-			key := getItemKey(item)
+			keys := getItemKeys(item)
 
-			if key != "" {
-				if entry, found := seen[key]; found {
+			if len(keys) != 0 {
+				var entry *seenEntry
+				for _, key := range keys {
+					if found := seen[key]; found != nil {
+						entry = found
+						break
+					}
+				}
+
+				if entry != nil {
 					// Duplicate: associate as additional instance
 					if originalID, ok := item["Id"].(string); ok && originalID != "" {
 						a.IDStore.AssociateAdditionalInstance(entry.virtualID, originalID, r.ServerIndex)
@@ -596,12 +609,18 @@ func (a *App) mergedItemsPayload(results []upstreamItemsResult) map[string]any {
 						merged[entry.mergedIndex] = item
 						entry.serverIndex = r.ServerIndex
 					}
+					for _, key := range keys {
+						seen[key] = entry
+					}
 					continue
 				}
 				// First occurrence: create virtual ID, rewrite other fields without touching Id
 				if originalID, ok := item["Id"].(string); ok && originalID != "" {
 					virtualID := a.IDStore.GetOrCreateVirtualID(originalID, r.ServerIndex)
-					seen[key] = &seenEntry{virtualID: virtualID, mergedIndex: len(merged), serverIndex: r.ServerIndex}
+					entry := &seenEntry{virtualID: virtualID, mergedIndex: len(merged), serverIndex: r.ServerIndex}
+					for _, key := range keys {
+						seen[key] = entry
+					}
 					delete(item, "Id")
 					rewriteResponseIDs(item, r.ServerIndex, a.IDStore, cfg.Server.ID, a.Auth.ProxyUserID())
 					item["Id"] = virtualID

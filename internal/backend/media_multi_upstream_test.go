@@ -100,7 +100,49 @@ func TestGetItemKeySupportsSeasonDeduplication(t *testing.T) {
 		"IndexNumber": 1,
 	}
 
-	if got := getItemKey(item); got != "season:ruri dragon:S1" {
-		t.Fatalf("getItemKey() = %q, want %q", got, "season:ruri dragon:S1")
+	if got := getItemKeys(item); len(got) == 0 || got[0] != "season:ruri dragon:S1" {
+		t.Fatalf("getItemKeys() = %#v, want first key %q", got, "season:ruri dragon:S1")
 	}
+}
+
+func TestMergedItemsPayloadDeduplicatesAcrossProviderAndNameYearKeys(t *testing.T) {
+	withTempApp(t, func(app *App, handler http.Handler) {
+		payload := app.mergedItemsPayload([]upstreamItemsResult{
+			{
+				ServerIndex: 0,
+				Items: []map[string]any{
+					{
+						"Id":             "series-a",
+						"Type":           "Series",
+						"Name":           "甄嬛传",
+						"ProductionYear": 2011,
+						"ProviderIds":    map[string]any{"Tmdb": "12345"},
+					},
+				},
+			},
+			{
+				ServerIndex: 1,
+				Items: []map[string]any{
+					{
+						"Id":             "series-b",
+						"Type":           "Series",
+						"Name":           "甄嬛传",
+						"ProductionYear": 2011,
+					},
+				},
+			},
+		})
+
+		items, _ := payload["Items"].([]any)
+		if len(items) != 1 {
+			t.Fatalf("item count = %d, want 1 payload=%#v", len(items), payload)
+		}
+
+		first := items[0].(map[string]any)
+		firstID, _ := first["Id"].(string)
+		resolved := app.IDStore.ResolveVirtualID(firstID)
+		if resolved == nil || len(resolved.OtherInstances) != 1 || resolved.OtherInstances[0].OriginalID != "series-b" {
+			t.Fatalf("mixed metadata association missing: %#v", resolved)
+		}
+	})
 }

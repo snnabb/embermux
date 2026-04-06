@@ -1,4 +1,4 @@
-﻿package backend
+package backend
 
 import (
 	"encoding/json"
@@ -201,6 +201,70 @@ func TestSearchHintsAggregatesAndRewritesIDs(t *testing.T) {
 		}
 		if got, _ := secondaryUserID.Load().(string); got != "user-b" {
 			t.Fatalf("secondary UserId query = %q, want user-b", got)
+		}
+	})
+}
+
+func TestSearchHintsDeduplicatesAcrossProviderAndNameYearKeys(t *testing.T) {
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/Users/AuthenticateByName":
+			_ = json.NewEncoder(w).Encode(map[string]any{"AccessToken": "token-a", "User": map[string]any{"Id": "user-a"}})
+		case r.Method == http.MethodGet && r.URL.Path == "/Search/Hints":
+			_ = json.NewEncoder(w).Encode(map[string]any{"SearchHints": []map[string]any{{
+				"Id":             "series-a",
+				"Type":           "Series",
+				"Name":           "甄嬛传",
+				"ProductionYear": 2011,
+				"ProviderIds":    map[string]any{"Tmdb": "12345"},
+			}}, "TotalRecordCount": 1})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer primary.Close()
+
+	secondary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/Users/AuthenticateByName":
+			_ = json.NewEncoder(w).Encode(map[string]any{"AccessToken": "token-b", "User": map[string]any{"Id": "user-b"}})
+		case r.Method == http.MethodGet && r.URL.Path == "/Search/Hints":
+			_ = json.NewEncoder(w).Encode(map[string]any{"SearchHints": []map[string]any{{
+				"Id":             "series-b",
+				"Type":           "Series",
+				"Name":           "甄嬛传",
+				"ProductionYear": 2011,
+			}}, "TotalRecordCount": 1})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer secondary.Close()
+
+	config := fmt.Sprintf("server:\n  port: 8096\n  name: \"Test Server\"\n  id: \"server-1\"\n\nadmin:\n  username: \"admin\"\n  password: \"secret\"\n\nplayback:\n  mode: \"proxy\"\n\ntimeouts:\n  api: 30000\n  global: 15000\n  login: 10000\n  healthCheck: 10000\n  healthInterval: 60000\n\nproxies: []\nupstream:\n  - name: \"A\"\n    url: %q\n    username: \"u1\"\n    password: \"p1\"\n  - name: \"B\"\n    url: %q\n    username: \"u2\"\n    password: \"p2\"\n", primary.URL, secondary.URL)
+
+	withTempAppConfig(t, config, func(app *App, handler http.Handler) {
+		token := loginToken(t, handler, "secret")
+		rr := doJSONRequest(t, handler, http.MethodGet, "/Search/Hints?SearchTerm=zhenhuan", nil, token)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("search hints status = %d, body=%s", rr.Code, rr.Body.String())
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("unmarshal search hints: %v", err)
+		}
+		hints, _ := payload["SearchHints"].([]any)
+		if len(hints) != 1 {
+			t.Fatalf("hint count = %d, want 1 payload=%#v", len(hints), payload)
+		}
+		if payload["TotalRecordCount"].(float64) != 1 {
+			t.Fatalf("unexpected total count: %#v", payload)
+		}
+		first := hints[0].(map[string]any)
+		firstID, _ := first["Id"].(string)
+		resolved := app.IDStore.ResolveVirtualID(firstID)
+		if resolved == nil || len(resolved.OtherInstances) != 1 || resolved.OtherInstances[0].OriginalID != "series-b" {
+			t.Fatalf("search hint additional instances missing: %#v", resolved)
 		}
 	})
 }
