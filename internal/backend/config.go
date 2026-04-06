@@ -63,6 +63,7 @@ type UpstreamConfig struct {
 	ProxyID             string
 	PriorityMetadata    bool
 	StreamingURL        string
+	StreamHosts         string // JSON array of additional playback host URLs
 	CustomUserAgent     string
 	CustomClient        string
 	CustomClientVersion string
@@ -453,6 +454,8 @@ func assignListField(cfg *Config, listName string, index int, key, value string)
 			upstream.PriorityMetadata = parseBoolValue(value)
 		case "streamingUrl":
 			upstream.StreamingURL = parseStringValue(value)
+		case "streamHosts":
+			upstream.StreamHosts = parseStringValue(value)
 		case "customUserAgent":
 			upstream.CustomUserAgent = parseStringValue(value)
 		case "customClient":
@@ -526,6 +529,9 @@ func renderConfigYAML(cfg *Config) string {
 			}
 			if upstream.StreamingURL != "" {
 				fmt.Fprintf(&b, "    streamingUrl: %s\n", yamlStr(upstream.StreamingURL))
+			}
+			if upstream.StreamHosts != "" && upstream.StreamHosts != "[]" {
+				fmt.Fprintf(&b, "    streamHosts: %s\n", yamlStr(upstream.StreamHosts))
 			}
 			if upstream.SpoofClient == "custom" {
 				if upstream.CustomUserAgent != "" {

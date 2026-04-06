@@ -114,7 +114,8 @@ type adminUpstreamInput struct {
 	FollowRedirects     *bool   `json:"followRedirects"`
 	ProxyID             *string `json:"proxyId"`
 	PriorityMetadata    *bool   `json:"priorityMetadata"`
-	StreamingURL        *string `json:"streamingUrl"`
+	StreamingURL        *string   `json:"streamingUrl"`
+	StreamHosts         *[]string `json:"streamHosts"`
 	CustomUserAgent     *string `json:"customUserAgent"`
 	CustomClient        *string `json:"customClient"`
 	CustomClientVersion *string `json:"customClientVersion"`
@@ -733,6 +734,8 @@ func (a *App) handleAdminUpstreamList(w http.ResponseWriter, r *http.Request) {
 			"followRedirects":     upstream.FollowRedirects,
 			"proxyId":             valueOrNil(upstream.ProxyID),
 			"priorityMetadata":    upstream.PriorityMetadata,
+			"streamingUrl":        upstream.StreamingURL,
+			"streamHosts":         decodeStreamHosts(upstream.StreamHosts),
 			"customUserAgent":     upstream.CustomUserAgent,
 			"customClient":        upstream.CustomClient,
 			"customClientVersion": upstream.CustomClientVersion,
@@ -1165,6 +1168,25 @@ func valueOrNil(value string) any {
 	return value
 }
 
+func decodeStreamHosts(raw string) []string {
+	if raw == "" || raw == "[]" {
+		return []string{}
+	}
+	var hosts []string
+	if err := json.Unmarshal([]byte(raw), &hosts); err != nil {
+		return []string{}
+	}
+	return hosts
+}
+
+func encodeStreamHosts(hosts []string) string {
+	if len(hosts) == 0 {
+		return "[]"
+	}
+	data, _ := json.Marshal(hosts)
+	return string(data)
+}
+
 func parsePathIndex(r *http.Request, name string) (int, bool) {
 	value := r.PathValue(name)
 	parsed, err := strconv.Atoi(value)
@@ -1334,6 +1356,9 @@ func applyAdminUpstreamInput(dst *UpstreamConfig, body adminUpstreamInput, isCre
 		if body.StreamingURL != nil {
 			dst.StreamingURL = strings.TrimSpace(*body.StreamingURL)
 		}
+		if body.StreamHosts != nil {
+			dst.StreamHosts = encodeStreamHosts(*body.StreamHosts)
+		}
 		if body.CustomUserAgent != nil {
 			dst.CustomUserAgent = strings.TrimSpace(*body.CustomUserAgent)
 		}
@@ -1384,6 +1409,9 @@ func applyAdminUpstreamInput(dst *UpstreamConfig, body adminUpstreamInput, isCre
 	}
 	if body.StreamingURL != nil {
 		dst.StreamingURL = strings.TrimSpace(*body.StreamingURL)
+	}
+	if body.StreamHosts != nil {
+		dst.StreamHosts = encodeStreamHosts(*body.StreamHosts)
 	}
 	if body.CustomUserAgent != nil {
 		dst.CustomUserAgent = strings.TrimSpace(*body.CustomUserAgent)
