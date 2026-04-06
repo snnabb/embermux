@@ -13,6 +13,23 @@ info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
+prompt_read() {
+    local __var_name="$1"
+    local __prompt="$2"
+    local __value=""
+
+    if [ -t 0 ]; then
+        read -r -p "$__prompt" __value || error "读取输入失败"
+    elif [ "${0##*/}" = "bash" ] || [ "${0##*/}" = "sh" ]; then
+        [ -r /dev/tty ] || error "交互模式需要终端，请下载脚本后再执行: bash install.sh"
+        read -r -p "$__prompt" __value < /dev/tty || error "读取终端输入失败"
+    else
+        read -r -p "$__prompt" __value || error "读取输入失败"
+    fi
+
+    printf -v "$__var_name" '%s' "$__value"
+}
+
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
         error "请使用 root 用户或 sudo 执行此脚本"
@@ -75,7 +92,7 @@ show_menu() {
         echo "  2) 卸载"
         echo "  3) 退出"
         echo ""
-        read -rp "  请选择操作 [1-3]: " choice
+        prompt_read choice "  请选择操作 [1-3]: "
         case "$choice" in
             1) do_update ;;
             2) do_uninstall ;;
@@ -88,7 +105,7 @@ show_menu() {
         echo "  1) 安装 EmberMux"
         echo "  2) 退出"
         echo ""
-        read -rp "  请选择操作 [1-2]: " choice
+        prompt_read choice "  请选择操作 [1-2]: "
         case "$choice" in
             1) do_install ;;
             2) echo "  退出"; exit 0 ;;
@@ -236,7 +253,7 @@ do_uninstall() {
 
     echo ""
     warn "即将卸载 EmberMux"
-    read -rp "  确认卸载？配置和数据将保留 [y/N]: " yn
+    prompt_read yn "  确认卸载？配置和数据将保留 [y/N]: "
     case "$yn" in
         [Yy]*) ;;
         *) echo "  取消卸载"; exit 0 ;;
