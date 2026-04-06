@@ -144,16 +144,21 @@ func (a *App) handleUserItems(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
 			return
 		}
-		query.Set("ParentId", resolved.OriginalID)
-		query.Del("parentId")
-		query.Del("parentid")
-		payload, err := resolved.Client.RequestJSON(r.Context(), requestContextFrom(r.Context()), a.Identity, http.MethodGet, "/Users/"+resolved.Client.UserID+"/Items", query, nil)
-		if err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]any{"message": err.Error()})
+		instances := a.collectItemInstances(resolved)
+		if len(instances) <= 1 {
+			query.Set("ParentId", resolved.OriginalID)
+			query.Del("parentId")
+			query.Del("parentid")
+			payload, err := resolved.Client.RequestJSON(r.Context(), requestContextFrom(r.Context()), a.Identity, http.MethodGet, "/Users/"+resolved.Client.UserID+"/Items", query, nil)
+			if err != nil {
+				writeJSON(w, http.StatusBadGateway, map[string]any{"message": err.Error()})
+				return
+			}
+			a.rewriteItems(asItems(payload), resolved.ServerIndex)
+			writeJSON(w, http.StatusOK, payload)
 			return
 		}
-		a.rewriteItems(asItems(payload), resolved.ServerIndex)
-		writeJSON(w, http.StatusOK, payload)
+		writeJSON(w, http.StatusOK, a.mergedItemsPayload(a.fetchChildrenAcrossInstances(r, instances, query)))
 		return
 	}
 	results := a.fetchItemsAcrossUpstreams(r.Context(), requestContextFrom(r.Context()), "/Users/%s/Items", query, nil)
@@ -472,7 +477,15 @@ func getItemKey(item map[string]any) string {
 		}
 		return "name:" + strings.ToLower(name) + ":" + year
 	}
-	// Priority 3: Episode by SeriesName + Season:Episode
+	// Priority 3: Season by SeriesName + SeasonNumber
+	if itemType == "Season" {
+		seriesName, _ := item["SeriesName"].(string)
+		idx, okI := numericInt(item["IndexNumber"])
+		if seriesName != "" && okI {
+			return "season:" + strings.ToLower(seriesName) + ":S" + strconv.Itoa(idx)
+		}
+	}
+	// Priority 4: Episode by SeriesName + Season:Episode
 	if itemType == "Episode" {
 		seriesName, _ := item["SeriesName"].(string)
 		parentIdx, okP := numericInt(item["ParentIndexNumber"])
@@ -636,6 +649,43 @@ func paginateItems(merged []map[string]any, query url.Values) map[string]any {
 
 func (a *App) collectItemInstances(resolved *routeResolution) []seriesInstance {
 	return buildSeriesInstances(resolved, a.Upstream)
+}
+
+func (a *App) fetchChildrenAcrossInstances(r *http.Request, instances []seriesInstance, baseQuery url.Values) []upstreamItemsResult {
+	type slot struct {
+		result upstreamItemsResult
+		ok     bool
+	}
+
+	slots := make([]slot, len(instances))
+	var wg sync.WaitGroup
+	for i, inst := range instances {
+		wg.Add(1)
+		go func(idx int, inst seriesInstance) {
+			defer wg.Done()
+			query := cloneValues(baseQuery)
+			query.Set("ParentId", inst.OriginalID)
+			query.Del("parentId")
+			query.Del("parentid")
+			payload, err := inst.Client.RequestJSON(r.Context(), requestContextFrom(r.Context()), a.Identity, http.MethodGet, "/Users/"+inst.Client.UserID+"/Items", query, nil)
+			if err != nil {
+				return
+			}
+			slots[idx] = slot{
+				result: upstreamItemsResult{ServerIndex: inst.ServerIndex, Items: asItems(payload)},
+				ok:     true,
+			}
+		}(i, inst)
+	}
+	wg.Wait()
+
+	results := make([]upstreamItemsResult, 0, len(instances))
+	for _, s := range slots {
+		if s.ok {
+			results = append(results, s.result)
+		}
+	}
+	return results
 }
 
 func firstQueryValue(values url.Values, keys ...string) string {
