@@ -64,7 +64,7 @@ async function doReorder(f,t){const r=await api('/upstream/reorder',{method:'POS
 async function loadUp(){const r=await api('/upstream');if(!r)return;const list=await r.json();cached=list||[];const c=document.getElementById('upstream-list');
   if(!list||!list.length){c.innerHTML='<div class="empty-state"><p>暂无上游服务器，点击右上角添加</p></div>';return}
   c.innerHTML=list.map(u=>{const hosts=[u.streamingUrl||'',...(u.streamHosts||[])].filter(Boolean);let pb='';if(hosts.length===1)pb='<p>播放回源：'+esc(hosts[0])+'</p>';else if(hosts.length>1)pb='<p>播放回源：'+hosts.length+' 个地址</p>';
-    return'<div class="card glass-panel" data-index="'+u.index+'" draggable="true"><div class="card-header"><span class="card-title">'+DH+'<span class="dot '+(u.online?'dot-online':'dot-offline')+'"></span>'+esc(u.name)+'</span>'+pBadge(u.playbackMode)+'</div><div class="card-body"><p>地址：'+esc(u.url)+'</p><p>认证：'+(u.authType==='apiKey'?'API Key':'用户名/密码')+(u.username?' ('+esc(u.username)+')':'')+'</p>'+pb+'<p>UA 伪装：'+esc(uLabel(u.spoofClient))+'</p></div><div class="card-footer"><button class="btn btn-ghost btn-sm" onclick="EM.editUp('+u.index+')">编辑</button><button class="btn btn-ghost btn-sm" onclick="EM.reconUp('+u.index+')">重连</button><button class="btn btn-ghost btn-sm" onclick="EM.diag(this,'+u.index+')">诊断</button><button class="btn btn-danger btn-sm" onclick="EM.delUp('+u.index+')">删除</button></div></div>'}).join('')}
+    return'<div class="card glass-panel" data-index="'+u.index+'" draggable="true"><div class="card-header"><span class="card-title">'+DH+'<span class="dot '+(u.online?'dot-online':'dot-offline')+'"></span>'+esc(u.name)+'</span>'+pBadge(u.playbackMode)+'</div><div class="card-body"><p>地址：'+esc(u.url)+'</p><p>认证：'+(u.authType==='apiKey'?'API Key':'用户名/密码')+(u.username?' ('+esc(u.username)+')':'')+'</p>'+pb+'<p>UA 伪装：'+esc(uLabel(u.spoofClient))+'</p><p>浏览库：'+(u.browseEnabled!==false?'开启':'仅播放')+'</p></div><div class="card-footer"><button class="btn btn-ghost btn-sm" onclick="EM.editUp('+u.index+')">编辑</button><button class="btn btn-ghost btn-sm" onclick="EM.reconUp('+u.index+')">重连</button><button class="btn btn-ghost btn-sm" onclick="EM.diag(this,'+u.index+')">诊断</button><button class="btn btn-danger btn-sm" onclick="EM.delUp('+u.index+')">删除</button></div></div>'}).join('')}
 
 // Multi-playback list
 function buildPBList(ctn,hosts){
@@ -85,6 +85,7 @@ function upForm(data){const d=data||{},isEdit=!!data;
     <div id="uf-pw"><div class="form-row"><div class="form-group"><label>用户名 <span class="required">*</span></label><input id="uf-username" value="${esc(d.username||'')}"></div><div class="form-group"><label>密码${isEdit?'':' <span class="required">*</span>'}</label><input type="password" id="uf-password" placeholder="${isEdit?'留空保持不变':''}"></div></div></div>
     <div id="uf-ak" class="hidden"><div class="form-group"><label>API Key <span class="required">*</span></label><input id="uf-apiKey"></div></div>
     <div class="form-group"><label>UA 伪装</label><select id="uf-spoofClient">${uas.map(s=>'<option value="'+s[0]+'"'+((d.spoofClient||'infuse')===s[0]?' selected':'')+'>'+s[1]+'</option>').join('')}</select></div>
+    <div class="form-group form-group-inline"><input type="checkbox" id="uf-browseEnabled"${d.browseEnabled!==false?' checked':''}><label for="uf-browseEnabled">参与浏览库</label></div>
     <div class="form-group form-group-inline"><input type="checkbox" id="uf-followRedirects"${d.followRedirects!==false?' checked':''}><label for="uf-followRedirects">跟随重定向</label></div>
     <div class="form-group form-group-inline"><input type="checkbox" id="uf-priorityMeta"${d.priorityMetadata?' checked':''}><label for="uf-priorityMeta">元数据优先</label></div>
     <div class="form-group"><label>代理 ID（可选）</label><input id="uf-proxyId" value="${esc(d.proxyId||'')}"></div>`}
@@ -93,7 +94,7 @@ let pbCtrl=null;
 function initPB(d){const dd=d||{};let hosts=[];if(dd.streamingUrl)hosts.push(dd.streamingUrl);if(dd.streamHosts&&dd.streamHosts.length)hosts=hosts.concat(dd.streamHosts);if(!hosts.length)hosts=[''];const ctn=document.getElementById('uf-pb-list');pbCtrl=buildPBList(ctn,hosts);document.getElementById('uf-pb-add').onclick=()=>pbCtrl.add()}
 
 function collectUp(){const at=document.getElementById('uf-authType').value;
-  const body={name:document.getElementById('uf-name').value,url:document.getElementById('uf-url').value,playbackMode:document.getElementById('uf-playbackMode').value,spoofClient:document.getElementById('uf-spoofClient').value,followRedirects:document.getElementById('uf-followRedirects').checked,priorityMetadata:document.getElementById('uf-priorityMeta').checked,proxyId:document.getElementById('uf-proxyId').value||''};
+  const body={name:document.getElementById('uf-name').value,url:document.getElementById('uf-url').value,browseEnabled:document.getElementById('uf-browseEnabled').checked,playbackMode:document.getElementById('uf-playbackMode').value,spoofClient:document.getElementById('uf-spoofClient').value,followRedirects:document.getElementById('uf-followRedirects').checked,priorityMetadata:document.getElementById('uf-priorityMeta').checked,proxyId:document.getElementById('uf-proxyId').value||''};
   const allPB=[];document.querySelectorAll('.pb-input').forEach(inp=>{const v=inp.value.trim();if(v)allPB.push(v)});body.streamingUrl=allPB[0]||'';body.streamHosts=allPB.length>1?allPB.slice(1):[];
   if(at==='password'){body.username=document.getElementById('uf-username').value;const pw=document.getElementById('uf-password').value;if(pw)body.password=pw}else{body.apiKey=document.getElementById('uf-apiKey').value}return body}
 
@@ -112,7 +113,7 @@ async function diag(btn,idx){const card=btn.closest('.card');let p=card.querySel
   const rows=[];rows.push(dr('连接状态',u.online?'<span style="color:var(--green)">● 在线</span>':'<span style="color:var(--red)">● 离线</span>'));
   rows.push(dr('认证方式',u.authType==='apiKey'?'API Key':'用户名/密码'));rows.push(dr('UA 伪装',esc(uLabel(u.spoofClient))));rows.push(dr('播放模式',esc(pLabel(u.playbackMode))));
   const hosts=[u.streamingUrl||'',...(u.streamHosts||[])].filter(Boolean);if(hosts.length)rows.push(dr('播放回源',hosts.map(h=>esc(h)).join('<br>')));
-  rows.push(dr('跟随重定向',u.followRedirects!==false?'是':'否'));rows.push(dr('元数据优先',u.priorityMetadata?'是':'否'));
+  rows.push(dr('浏览库',u.browseEnabled!==false?'开启':'仅播放'));rows.push(dr('跟随重定向',u.followRedirects!==false?'是':'否'));rows.push(dr('元数据优先',u.priorityMetadata?'是':'否'));
   if(u.proxyId)rows.push(dr('关联代理',esc(u.proxyId)));
   if(!u.online)rows.push(dr('建议','检查上游地址和认证信息，或尝试"重连"'));
   p=document.createElement('div');p.className='diag-panel';p.innerHTML='<dl>'+rows.join('')+'</dl>';card.appendChild(p)}

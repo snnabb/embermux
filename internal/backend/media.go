@@ -68,6 +68,34 @@ func cloneValues(values url.Values) url.Values {
 	return cloned
 }
 
+func (a *App) browseClients() []*UpstreamClient {
+	cfg := a.ConfigStore.Snapshot()
+	clients := a.Upstream.OnlineClients()
+	out := make([]*UpstreamClient, 0, len(clients))
+	for _, client := range clients {
+		if client.ServerIndex >= 0 && client.ServerIndex < len(cfg.Upstream) && cfg.Upstream[client.ServerIndex].BrowseEnabled {
+			out = append(out, client)
+		}
+	}
+	return out
+}
+
+func (a *App) isBrowseEnabled(serverIndex int) bool {
+	cfg := a.ConfigStore.Snapshot()
+	return serverIndex >= 0 && serverIndex < len(cfg.Upstream) && cfg.Upstream[serverIndex].BrowseEnabled
+}
+
+func (a *App) filterBrowsableInstances(instances []seriesInstance) []seriesInstance {
+	cfg := a.ConfigStore.Snapshot()
+	out := make([]seriesInstance, 0, len(instances))
+	for _, inst := range instances {
+		if inst.ServerIndex >= 0 && inst.ServerIndex < len(cfg.Upstream) && cfg.Upstream[inst.ServerIndex].BrowseEnabled {
+			out = append(out, inst)
+		}
+	}
+	return out
+}
+
 func asItems(payload any) []map[string]any {
 	switch typed := payload.(type) {
 	case []any:
@@ -103,7 +131,7 @@ func (a *App) handleItemsCollection(w http.ResponseWriter, r *http.Request) {
 		a.handleFallbackProxy(w, r)
 		return
 	}
-	clients := a.Upstream.OnlineClients()
+	clients := a.browseClients()
 	type slot struct {
 		result upstreamItemsResult
 		ok     bool
@@ -144,24 +172,28 @@ func (a *App) handleUserItems(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
 			return
 		}
-		instances := a.collectItemInstances(resolved)
+		instances := a.filterBrowsableInstances(a.collectItemInstances(resolved))
+		if len(instances) == 0 {
+			writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
+			return
+		}
 		if len(instances) <= 1 {
-			query.Set("ParentId", resolved.OriginalID)
+			query.Set("ParentId", instances[0].OriginalID)
 			query.Del("parentId")
 			query.Del("parentid")
-			payload, err := resolved.Client.RequestJSON(r.Context(), requestContextFrom(r.Context()), a.Identity, http.MethodGet, "/Users/"+resolved.Client.UserID+"/Items", query, nil)
+			payload, err := instances[0].Client.RequestJSON(r.Context(), requestContextFrom(r.Context()), a.Identity, http.MethodGet, "/Users/"+instances[0].Client.UserID+"/Items", query, nil)
 			if err != nil {
 				writeJSON(w, http.StatusBadGateway, map[string]any{"message": err.Error()})
 				return
 			}
-			a.rewriteItems(asItems(payload), resolved.ServerIndex)
+			a.rewriteItems(asItems(payload), instances[0].ServerIndex)
 			writeJSON(w, http.StatusOK, payload)
 			return
 		}
 		writeJSON(w, http.StatusOK, a.mergedItemsPayload(a.fetchChildrenAcrossInstances(r, instances, query)))
 		return
 	}
-	results := a.fetchItemsAcrossUpstreams(r.Context(), requestContextFrom(r.Context()), "/Users/%s/Items", query, nil)
+	results := a.fetchItemsAcrossClients(r.Context(), requestContextFrom(r.Context()), a.browseClients(), "/Users/%s/Items", query, nil)
 	merged := a.mergedItemsPayload(results)
 	if items, ok := merged["Items"].([]any); ok {
 		asMaps := make([]map[string]any, 0, len(items))
@@ -185,7 +217,11 @@ func (a *App) handleUserItemsResume(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
 			return
 		}
-		instances := buildSeriesInstances(resolved, a.Upstream)
+		instances := a.filterBrowsableInstances(buildSeriesInstances(resolved, a.Upstream))
+		if len(instances) == 0 {
+			writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
+			return
+		}
 		originalIDs := map[string]struct{}{}
 		for _, inst := range instances {
 			originalIDs[inst.OriginalID] = struct{}{}
@@ -209,7 +245,7 @@ func (a *App) handleUserItemsResume(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
 		return
 	}
-	results := a.fetchItemsAcrossUpstreams(r.Context(), requestContextFrom(r.Context()), "/Users/%s/Items/Resume", query, nil)
+	results := a.fetchItemsAcrossClients(r.Context(), requestContextFrom(r.Context()), a.browseClients(), "/Users/%s/Items/Resume", query, nil)
 	writeJSON(w, http.StatusOK, a.mergedItemsPayload(results))
 }
 
@@ -219,6 +255,10 @@ func (a *App) handleUserItemsLatest(w http.ResponseWriter, r *http.Request) {
 	if parentID != "" {
 		resolved := a.resolveRouteID(parentID)
 		if resolved == nil {
+			writeJSON(w, http.StatusOK, []any{})
+			return
+		}
+		if !a.isBrowseEnabled(resolved.ServerIndex) {
 			writeJSON(w, http.StatusOK, []any{})
 			return
 		}
@@ -233,7 +273,7 @@ func (a *App) handleUserItemsLatest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, items)
 		return
 	}
-	clients := a.Upstream.OnlineClients()
+	clients := a.browseClients()
 	type slot struct {
 		items []map[string]any
 	}
@@ -268,7 +308,11 @@ func (a *App) handleShowsNextUp(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
 			return
 		}
-		instances := buildSeriesInstances(resolved, a.Upstream)
+		instances := a.filterBrowsableInstances(buildSeriesInstances(resolved, a.Upstream))
+		if len(instances) == 0 {
+			writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
+			return
+		}
 		originalIDs := map[string]struct{}{}
 		for _, inst := range instances {
 			originalIDs[inst.OriginalID] = struct{}{}
@@ -290,7 +334,7 @@ func (a *App) handleShowsNextUp(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
 		return
 	}
-	results := a.fetchItemsAcrossUpstreams(r.Context(), requestContextFrom(r.Context()), "/Shows/NextUp", query, nil)
+	results := a.fetchItemsAcrossClients(r.Context(), requestContextFrom(r.Context()), a.browseClients(), "/Shows/NextUp", query, nil)
 	writeJSON(w, http.StatusOK, a.mergedItemsPayload(results))
 }
 
@@ -414,8 +458,7 @@ func (a *App) handleItemThemeMedia(w http.ResponseWriter, r *http.Request) {
 	rewriteResponseIDs(payload, resolved.ServerIndex, a.IDStore, cfg.Server.ID, a.Auth.ProxyUserID())
 	writeJSON(w, http.StatusOK, payload)
 }
-func (a *App) fetchItemsAcrossUpstreams(ctx context.Context, reqCtx *RequestContext, pathTemplate string, query url.Values, body any) []upstreamItemsResult {
-	clients := a.Upstream.OnlineClients()
+func (a *App) fetchItemsAcrossClients(ctx context.Context, reqCtx *RequestContext, clients []*UpstreamClient, pathTemplate string, query url.Values, body any) []upstreamItemsResult {
 	cfg := a.ConfigStore.Snapshot()
 	globalTimeout := time.Duration(cfg.Timeouts.Global) * time.Millisecond
 	if globalTimeout <= 0 {
@@ -456,6 +499,10 @@ func (a *App) fetchItemsAcrossUpstreams(ctx context.Context, reqCtx *RequestCont
 		}
 	}
 	return results
+}
+
+func (a *App) fetchItemsAcrossUpstreams(ctx context.Context, reqCtx *RequestContext, pathTemplate string, query url.Values, body any) []upstreamItemsResult {
+	return a.fetchItemsAcrossClients(ctx, reqCtx, a.Upstream.OnlineClients(), pathTemplate, query, body)
 }
 
 // getItemKeys generates every deduplication key available for an item.

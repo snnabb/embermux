@@ -1,4 +1,4 @@
-﻿package backend
+package backend
 
 import (
 	"bytes"
@@ -221,6 +221,7 @@ func TestAdminSettingsUpstreamAndProxyCrud(t *testing.T) {
 		updateUpstreamRR := doJSONRequest(t, handler, http.MethodPut, "/admin/api/upstream/0", map[string]any{
 			"followRedirects": false,
 			"spoofClient":     "passthrough",
+			"browseEnabled":   false,
 		}, token)
 		if updateUpstreamRR.Code != http.StatusOK {
 			t.Fatalf("update upstream status = %d, body=%s", updateUpstreamRR.Code, updateUpstreamRR.Body.String())
@@ -237,7 +238,7 @@ func TestAdminSettingsUpstreamAndProxyCrud(t *testing.T) {
 		if len(list) != 2 {
 			t.Fatalf("upstream count = %d, want 2", len(list))
 		}
-		if list[0]["followRedirects"] != false || list[0]["spoofClient"] != "passthrough" {
+		if list[0]["followRedirects"] != false || list[0]["spoofClient"] != "passthrough" || list[0]["browseEnabled"] != false {
 			t.Fatalf("unexpected updated upstream entry: %#v", list[0])
 		}
 
@@ -336,8 +337,6 @@ func TestAdminLogsEndpoints(t *testing.T) {
 		}
 	})
 }
-
-
 
 func TestSystemInfoPublicUsesRequestHostForLocalAddress(t *testing.T) {
 	withTempApp(t, func(app *App, handler http.Handler) {

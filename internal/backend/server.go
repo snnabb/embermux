@@ -104,23 +104,24 @@ func (l *loginRateLimiter) cleanup() {
 }
 
 type adminUpstreamInput struct {
-	Name                *string `json:"name"`
-	URL                 *string `json:"url"`
-	Username            *string `json:"username"`
-	Password            *string `json:"password"`
-	APIKey              *string `json:"apiKey"`
-	PlaybackMode        *string `json:"playbackMode"`
-	SpoofClient         *string `json:"spoofClient"`
-	FollowRedirects     *bool   `json:"followRedirects"`
-	ProxyID             *string `json:"proxyId"`
-	PriorityMetadata    *bool   `json:"priorityMetadata"`
+	Name                *string   `json:"name"`
+	URL                 *string   `json:"url"`
+	Username            *string   `json:"username"`
+	Password            *string   `json:"password"`
+	APIKey              *string   `json:"apiKey"`
+	BrowseEnabled       *bool     `json:"browseEnabled"`
+	PlaybackMode        *string   `json:"playbackMode"`
+	SpoofClient         *string   `json:"spoofClient"`
+	FollowRedirects     *bool     `json:"followRedirects"`
+	ProxyID             *string   `json:"proxyId"`
+	PriorityMetadata    *bool     `json:"priorityMetadata"`
 	StreamingURL        *string   `json:"streamingUrl"`
 	StreamHosts         *[]string `json:"streamHosts"`
-	CustomUserAgent     *string `json:"customUserAgent"`
-	CustomClient        *string `json:"customClient"`
-	CustomClientVersion *string `json:"customClientVersion"`
-	CustomDeviceName    *string `json:"customDeviceName"`
-	CustomDeviceId      *string `json:"customDeviceId"`
+	CustomUserAgent     *string   `json:"customUserAgent"`
+	CustomClient        *string   `json:"customClient"`
+	CustomClientVersion *string   `json:"customClientVersion"`
+	CustomDeviceName    *string   `json:"customDeviceName"`
+	CustomDeviceId      *string   `json:"customDeviceId"`
 }
 
 type adminSettingsInput struct {
@@ -729,6 +730,7 @@ func (a *App) handleAdminUpstreamList(w http.ResponseWriter, r *http.Request) {
 			"username":            upstream.Username,
 			"authType":            authType,
 			"online":              onlineByIndex[index],
+			"browseEnabled":       upstream.BrowseEnabled,
 			"playbackMode":        upstream.PlaybackMode,
 			"spoofClient":         upstream.SpoofClient,
 			"followRedirects":     upstream.FollowRedirects,
@@ -754,7 +756,7 @@ func (a *App) handleAdminUpstreamCreate(w http.ResponseWriter, r *http.Request) 
 	}
 
 	cfg := a.ConfigStore.Snapshot()
-	draft := UpstreamConfig{FollowRedirects: true}
+	draft := UpstreamConfig{BrowseEnabled: true, FollowRedirects: true}
 	applyAdminUpstreamInput(&draft, body, true)
 	normalizeUpstream(&draft, len(cfg.Upstream), &cfg)
 	if err := validateUpstreamDraft(draft); err != nil {
@@ -1338,6 +1340,9 @@ func applyAdminUpstreamInput(dst *UpstreamConfig, body adminUpstreamInput, isCre
 		if body.APIKey != nil {
 			dst.APIKey = *body.APIKey
 		}
+		if body.BrowseEnabled != nil {
+			dst.BrowseEnabled = *body.BrowseEnabled
+		}
 		if body.PlaybackMode != nil {
 			dst.PlaybackMode = strings.TrimSpace(*body.PlaybackMode)
 		}
@@ -1391,6 +1396,9 @@ func applyAdminUpstreamInput(dst *UpstreamConfig, body adminUpstreamInput, isCre
 	}
 	if body.APIKey != nil && *body.APIKey != "" {
 		dst.APIKey = *body.APIKey
+	}
+	if body.BrowseEnabled != nil {
+		dst.BrowseEnabled = *body.BrowseEnabled
 	}
 	if body.PlaybackMode != nil {
 		dst.PlaybackMode = strings.TrimSpace(*body.PlaybackMode)

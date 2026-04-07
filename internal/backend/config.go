@@ -57,6 +57,7 @@ type UpstreamConfig struct {
 	Username            string
 	Password            string
 	APIKey              string
+	BrowseEnabled       bool
 	PlaybackMode        string
 	SpoofClient         string
 	FollowRedirects     bool
@@ -306,7 +307,7 @@ func parseConfigYAML(raw string) (*Config, error) {
 			if listName == "proxies" {
 				cfg.Proxies = append(cfg.Proxies, ProxyConfig{})
 			} else {
-				cfg.Upstream = append(cfg.Upstream, UpstreamConfig{FollowRedirects: true})
+				cfg.Upstream = append(cfg.Upstream, UpstreamConfig{BrowseEnabled: true, FollowRedirects: true})
 			}
 			trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "-"))
 			if trimmed != "" {
@@ -442,6 +443,8 @@ func assignListField(cfg *Config, listName string, index int, key, value string)
 			upstream.Password = parseStringValue(value)
 		case "apiKey":
 			upstream.APIKey = parseStringValue(value)
+		case "browseEnabled":
+			upstream.BrowseEnabled = parseBoolValue(value)
 		case "playbackMode":
 			upstream.PlaybackMode = parseStringValue(value)
 		case "spoofClient":
@@ -520,6 +523,9 @@ func renderConfigYAML(cfg *Config) string {
 			} else {
 				fmt.Fprintf(&b, "    username: %s\n", yamlStr(upstream.Username))
 				fmt.Fprintf(&b, "    password: %s\n", yamlStr(upstream.Password))
+			}
+			if !upstream.BrowseEnabled {
+				fmt.Fprintf(&b, "    browseEnabled: false\n")
 			}
 			if upstream.PlaybackMode != cfg.Playback.Mode && upstream.PlaybackMode != "" {
 				fmt.Fprintf(&b, "    playbackMode: %s\n", yamlStr(upstream.PlaybackMode))

@@ -44,7 +44,7 @@ func (a *App) handleLibrarySelectableRemoteLibraries(w http.ResponseWriter, r *h
 }
 
 func (a *App) handleLibraryNamedArray(w http.ResponseWriter, r *http.Request, upstreamPath string) {
-	onlineClients := a.Upstream.OnlineClients()
+	onlineClients := a.browseClients()
 	cfg := a.ConfigStore.Snapshot()
 	multiSource := len(onlineClients) > 1
 	type slot struct {
@@ -81,7 +81,7 @@ func (a *App) handleLibraryNamedArray(w http.ResponseWriter, r *http.Request, up
 }
 
 func (a *App) handleLibraryMediaFolders(w http.ResponseWriter, r *http.Request) {
-	clients := a.Upstream.OnlineClients()
+	clients := a.browseClients()
 	cfg := a.ConfigStore.Snapshot()
 	type slot struct {
 		items []map[string]any
@@ -112,7 +112,7 @@ func (a *App) handleLibraryMediaFolders(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *App) handleLibraryTaxonomy(w http.ResponseWriter, r *http.Request, endpoint string) {
-	clients := a.Upstream.OnlineClients()
+	clients := a.browseClients()
 	cfg := a.ConfigStore.Snapshot()
 	type slot struct {
 		items []map[string]any
@@ -156,7 +156,11 @@ func (a *App) handleShowsSeasons(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
 		return
 	}
-	instances := buildSeriesInstances(resolved, a.Upstream)
+	instances := a.filterBrowsableInstances(buildSeriesInstances(resolved, a.Upstream))
+	if len(instances) == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
+		return
+	}
 	cfg := a.ConfigStore.Snapshot()
 	merged := map[int]*indexedItem{}
 	unknown := []indexedItem{}
@@ -236,7 +240,11 @@ func (a *App) handleShowsEpisodes(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
 		return
 	}
-	instances := buildSeriesInstances(resolved, a.Upstream)
+	instances := a.filterBrowsableInstances(buildSeriesInstances(resolved, a.Upstream))
+	if len(instances) == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
+		return
+	}
 	cfg := a.ConfigStore.Snapshot()
 	merged := map[string]*indexedItem{}
 	var unkeyed []indexedItem
@@ -341,7 +349,7 @@ func (a *App) handleSearchHints(w http.ResponseWriter, r *http.Request) {
 		Items       []map[string]any
 	}
 
-	clients := a.Upstream.OnlineClients()
+	clients := a.browseClients()
 	type slot struct {
 		result serverHints
 		ok     bool
