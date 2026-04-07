@@ -409,15 +409,30 @@ func (a *App) prefixCompatMiddleware(next http.Handler) http.Handler {
 			clone := r.Clone(r.Context())
 			copiedURL := *clone.URL
 			clone.URL = &copiedURL
-			clone.URL.Path = strings.TrimPrefix(r.URL.Path, "/emby")
+			clone.URL.Path = canonicalizeCompatPath(strings.TrimPrefix(r.URL.Path, "/emby"))
 			if clone.URL.Path == "" {
 				clone.URL.Path = "/"
 			}
 			next.ServeHTTP(w, clone)
 			return
 		}
+		if canonicalPath := canonicalizeCompatPath(r.URL.Path); canonicalPath != r.URL.Path {
+			clone := r.Clone(r.Context())
+			copiedURL := *clone.URL
+			clone.URL = &copiedURL
+			clone.URL.Path = canonicalPath
+			next.ServeHTTP(w, clone)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func canonicalizeCompatPath(path string) string {
+	if strings.EqualFold(path, "/Users/AuthenticateByName") {
+		return "/Users/AuthenticateByName"
+	}
+	return path
 }
 
 func (a *App) corsMiddleware(next http.Handler) http.Handler {

@@ -99,6 +99,21 @@ func loginToken(t *testing.T, handler http.Handler, password string) string {
 	return token
 }
 
+func TestAuthenticateByNameSupportsCaseVariants(t *testing.T) {
+	withTempApp(t, func(app *App, handler http.Handler) {
+		for _, target := range []string{"/Users/authenticatebyname", "/emby/Users/authenticatebyname"} {
+			req := httptest.NewRequest(http.MethodPost, target, bytes.NewBufferString(`{"Username":"admin","Pw":"secret"}`))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Emby-Authorization", `Emby Client="Infuse", Device="iPhone", DeviceId="abc", Version="1.0"`)
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("login path %s status = %d, want 200 body=%s", target, rr.Code, rr.Body.String())
+			}
+		}
+	})
+}
+
 func TestHandlerSupportsEmbyPrefixAndClientCapture(t *testing.T) {
 	withTempApp(t, func(app *App, handler http.Handler) {
 		req := httptest.NewRequest(http.MethodGet, "/emby/System/Info/Public", nil)
