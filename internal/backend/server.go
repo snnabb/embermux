@@ -630,7 +630,7 @@ func (a *App) handleUserObject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleUserViews(w http.ResponseWriter, r *http.Request) {
-	onlineClients := a.Upstream.OnlineClients()
+	onlineClients := a.browseClients()
 	cfg := a.ConfigStore.Snapshot()
 	multiSource := len(onlineClients) > 1
 	type slot struct {

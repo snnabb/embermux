@@ -107,6 +107,62 @@ func TestUserItemsSkipsBrowseDisabledUpstream(t *testing.T) {
 	})
 }
 
+func TestUserViewsSkipsBrowseDisabledUpstream(t *testing.T) {
+	var enabledCalls atomic.Int32
+	var disabledCalls atomic.Int32
+
+	enabled := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/Users/AuthenticateByName":
+			_ = json.NewEncoder(w).Encode(map[string]any{"AccessToken": "token-a", "User": map[string]any{"Id": "user-a"}})
+		case r.Method == http.MethodGet && r.URL.Path == "/Users/user-a/Views":
+			enabledCalls.Add(1)
+			_ = json.NewEncoder(w).Encode(map[string]any{"Items": []map[string]any{{"Id": "view-a", "Name": "Enabled Views"}}, "TotalRecordCount": 1})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer enabled.Close()
+
+	disabled := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/Users/AuthenticateByName":
+			_ = json.NewEncoder(w).Encode(map[string]any{"AccessToken": "token-b", "User": map[string]any{"Id": "user-b"}})
+		case r.Method == http.MethodGet && r.URL.Path == "/Users/user-b/Views":
+			disabledCalls.Add(1)
+			_ = json.NewEncoder(w).Encode(map[string]any{"Items": []map[string]any{{"Id": "view-b", "Name": "Disabled Views"}}, "TotalRecordCount": 1})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer disabled.Close()
+
+	config := fmt.Sprintf("server:\n  port: 8096\n  name: \"Test Server\"\n  id: \"server-1\"\n\nadmin:\n  username: \"admin\"\n  password: \"secret\"\n\nplayback:\n  mode: \"proxy\"\n\ntimeouts:\n  api: 30000\n  global: 15000\n  login: 10000\n  healthCheck: 10000\n  healthInterval: 60000\n\nproxies: []\nupstream:\n  - name: \"A\"\n    url: %q\n    username: \"u1\"\n    password: \"p1\"\n  - name: \"B\"\n    url: %q\n    username: \"u2\"\n    password: \"p2\"\n    browseEnabled: false\n", enabled.URL, disabled.URL)
+
+	withTempAppConfig(t, config, func(app *App, handler http.Handler) {
+		token := loginToken(t, handler, "secret")
+		rr := doJSONRequest(t, handler, http.MethodGet, "/Users/"+app.Auth.ProxyUserID()+"/Views", nil, token)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("views status = %d body=%s", rr.Code, rr.Body.String())
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("unmarshal views: %v", err)
+		}
+		items, _ := payload["Items"].([]any)
+		if len(items) != 1 {
+			t.Fatalf("view count = %d, want 1 payload=%#v", len(items), payload)
+		}
+		if enabledCalls.Load() != 1 {
+			t.Fatalf("enabled view call count = %d, want 1", enabledCalls.Load())
+		}
+		if disabledCalls.Load() != 0 {
+			t.Fatalf("disabled upstream views should not be called, got %d", disabledCalls.Load())
+		}
+	})
+}
+
 func TestSearchHintsSkipsBrowseDisabledUpstream(t *testing.T) {
 	var enabledCalls atomic.Int32
 	var disabledCalls atomic.Int32
